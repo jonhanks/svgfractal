@@ -1,0 +1,6 @@
+This is a simple koch curve generator.  It is built as a webserver that only outputs SVG so that I could do the following:
+
+* Play with SVG
+* Get graphical output without messing around with go-sdl or some other such library.
+
+On the extremely odd chance that anyone sees this code.  It is trivial code that I wrote to play with.  So I consider it in the public domain.  If I ever make something nicer of it I may change to a formal open source license.

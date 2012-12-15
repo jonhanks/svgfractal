@@ -118,7 +118,7 @@ func (l Line) Split(t float64) (Line, Line) {
 // return the point on a given line at scale factor t
 func (l Line) At(t float64) Point {
 	p := Point{X: l.Start.X + (t * l.Direction.X * l.Scale), Y: l.Start.Y + (t * l.Direction.Y * l.Scale)}
-	fmt.Printf("At %v\n", p)
+	//fmt.Printf("At %v\n", p)
 	return p
 }
 
@@ -168,8 +168,8 @@ func doFractal(s *svg.SVG, l Line, depth int, rot *Matrix) {
 		l1, l2 := l.Split(0.333333)
 		_, l3 := l2.Split(0.5)
 
-		fmt.Printf("---\n\tl1: %v\n\tl2: %v\n---\n", l1, l3)
-		fmt.Println(cdir)
+		//fmt.Printf("---\n\tl1: %v\n\tl2: %v\n---\n", l1, l3)
+		//fmt.Println(cdir)
 		//l1.Render(s)
 		doFractal(s, l1, depth-1, rot)
 		//mid.Render(s)

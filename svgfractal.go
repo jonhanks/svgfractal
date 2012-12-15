@@ -239,7 +239,9 @@ func lineFractal(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	fmt.Println("Starting server at localhost port 8080")
-	fmt.Println("Pass the url parameter complexity=n (where n=[0,9]")
+	fmt.Println("Pass the following url parameters:")
+	fmt.Println("complexity=n (where n=[0,9]")
+	fmt.Println("pi=n (where n is a real number")
 	http.Handle("/", http.HandlerFunc(lineFractal))
 	err := http.ListenAndServe("localhost:8080", nil)
 	if err != nil {

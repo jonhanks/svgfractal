@@ -208,6 +208,8 @@ func lineFractal(w http.ResponseWriter, req *http.Request) {
 		maxComplexity     = 9
 
 		defaultPi = 0.5
+		maxPi     = 1.0
+		minPi     = -1.0
 	)
 
 	_ = req.ParseForm()
@@ -219,6 +221,11 @@ func lineFractal(w http.ResponseWriter, req *http.Request) {
 	pi, err := strconv.ParseFloat(req.FormValue("pi"), 64)
 	if err != nil {
 		pi = defaultPi
+	}
+	if pi < minPi {
+		pi = minPi
+	} else if pi > maxPi {
+		pi = maxPi
 	}
 	if pi == 0.0 || pi == 1.0 {
 		complexity = 0
@@ -240,8 +247,8 @@ func lineFractal(w http.ResponseWriter, req *http.Request) {
 func main() {
 	fmt.Println("Starting server at localhost port 8080")
 	fmt.Println("Pass the following url parameters:")
-	fmt.Println("complexity=n (where n=[0,9]")
-	fmt.Println("pi=n (where n is a real number")
+	fmt.Println("complexity=n (where n in an integer in [0,9]")
+	fmt.Println("pi=n (where n is a real number [-1.0, 1.0])")
 	http.Handle("/", http.HandlerFunc(lineFractal))
 	err := http.ListenAndServe("localhost:8080", nil)
 	if err != nil {

@@ -10,8 +10,11 @@ package main
 import (
 	"fmt"
 	"github.com/ajstarks/svgo"
+	"html/template"
+	"io"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 )
 
@@ -27,6 +30,36 @@ type Vector struct {
 
 type Matrix struct {
 	Rows [][]float64
+}
+
+type CachedTemplate struct {
+	t    *template.Template
+	mod  int64
+	path string
+}
+
+var (
+	templates = make(map[string]*CachedTemplate)
+)
+
+func NewTemplate(path string) *CachedTemplate {
+	fInfo, err := os.Stat(path)
+	if err != nil {
+		panic("Error loading template file " + path + " " + err.Error())
+	}
+	return &CachedTemplate{t: template.Must(template.ParseFiles(path)), mod: fInfo.ModTime().Unix(), path: path}
+}
+
+func (t *CachedTemplate) Execute(w io.Writer, d interface{}) error {
+	fInfo, err := os.Stat(t.path)
+	if err == nil && fInfo.ModTime().Unix() > t.mod {
+		newT, err := template.ParseFiles(t.path)
+		if err == nil {
+			t.t = newT
+			t.mod = fInfo.ModTime().Unix()
+		}
+	}
+	return t.t.Execute(w, d)
 }
 
 func NewMatrix() *Matrix {
@@ -55,8 +88,7 @@ func (m *Matrix) Identity() {
 
 // rotate around the Z azis by theta degrees
 func (m *Matrix) Rotate(theta float64) {
-	cosT := math.Cos(theta)
-	sinT := math.Sin(theta)
+	sinT, cosT := math.Sincos(theta)
 	m.Rows[0][0] = cosT
 	m.Rows[0][1] = -sinT
 	m.Rows[1][0] = sinT
@@ -85,7 +117,7 @@ func (v Vector) GoString() string {
 
 /* rename these to useful names at some point */
 func NewLine(x1, y1, x2, y2 float64) Line {
-	return Line{Start: Point{X: x1, Y: y2}, Direction: Vector{Point{X: x2 - x1, Y: y2 - y1}}, Scale: 1.0}
+	return Line{Start: Point{X: x1, Y: y1}, Direction: Vector{Point{X: x2 - x1, Y: y2 - y1}}, Scale: 1.0}
 }
 
 func NewLine2(p Point, d Vector, s float64) Line {
@@ -123,7 +155,7 @@ func (l Line) At(t float64) Point {
 }
 
 func (l Line) GoString() string {
-	return fmt.Sprintf("L: %v - %v %s", l.Start, l.Direction, l.Scale)
+	return fmt.Sprintf("L: %s - %s %s", l.Start, l.Direction, l.Scale)
 }
 
 // draw a line
@@ -158,7 +190,7 @@ func MultMatrixVector(m *Matrix, v *Vector) *Vector {
 }
 
 // Do the fractal
-func doFractal(s *svg.SVG, l Line, depth int, rot *Matrix) {
+func doKochCurve(s *svg.SVG, l Line, depth int, rot *Matrix) {
 	if depth <= 0 {
 		l.Render(s)
 	} else {
@@ -171,7 +203,7 @@ func doFractal(s *svg.SVG, l Line, depth int, rot *Matrix) {
 		//fmt.Printf("---\n\tl1: %v\n\tl2: %v\n---\n", l1, l3)
 		//fmt.Println(cdir)
 		//l1.Render(s)
-		doFractal(s, l1, depth-1, rot)
+		doKochCurve(s, l1, depth-1, rot)
 		//mid.Render(s)
 
 		lmid := NewLine2(mid, *cdir, l1.Scale*1.0)
@@ -185,24 +217,27 @@ func doFractal(s *svg.SVG, l Line, depth int, rot *Matrix) {
 		l2b := NewLine3(mid2, l3.At(0.0))
 		//l2b.Render(s)
 
-		doFractal(s, l2a, depth-1, rot)
-		doFractal(s, l2b, depth-1, rot)
+		doKochCurve(s, l2a, depth-1, rot)
+		doKochCurve(s, l2b, depth-1, rot)
 
 		//l3.Render(s)
-		doFractal(s, l3, depth-1, rot)
+		doKochCurve(s, l3, depth-1, rot)
 	}
 }
 
-func fractalLine(s *svg.SVG, x1, y1, x2, y2, complexity int, rotation float64) {
+func kochCurve(s *svg.SVG, x1, y1, x2, y2, complexity int, rotation float64) {
 	l := NewLine(float64(x1), float64(y1), float64(x2), float64(y2))
+
+	//fmt.Printf("kochCurve (%d, %d) - (%d, %d)\n", x1, y1, x2, y2)
+	//fmt.Printf("line: %s\n\n", l)
 
 	m := NewMatrix()
 	m.Rotate(rotation)
 
-	doFractal(s, l, complexity, m)
+	doKochCurve(s, l, complexity, m)
 }
 
-func lineFractal(w http.ResponseWriter, req *http.Request) {
+func kochCurveHandler(w http.ResponseWriter, req *http.Request) {
 	const (
 		defaultComplexity = 6
 		maxComplexity     = 9
@@ -238,18 +273,71 @@ func lineFractal(w http.ResponseWriter, req *http.Request) {
 	s.Start(width, height)
 	defer s.End()
 	if pi < 0.0 {
-		fractalLine(s, 0, 50, width-1, 50, complexity, -math.Pi*pi)
+		kochCurve(s, 0, 50, width-1, 50, complexity, -math.Pi*pi)
 	} else {
-		fractalLine(s, 0, height-50, width-1, height-50, complexity, -math.Pi*pi)
+		kochCurve(s, 0, height-50, width-1, height-50, complexity, -math.Pi*pi)
+	}
+}
+
+func kochSnowflakeHandler(w http.ResponseWriter, req *http.Request) {
+	const (
+		defaultComplexity = 5
+		maxComplexity     = 8
+	)
+
+	_ = req.ParseForm()
+	complexity, err := strconv.Atoi(req.FormValue("complexity"))
+	if err != nil || complexity < 0 || complexity > maxComplexity {
+		complexity = defaultComplexity
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	s := svg.New(w)
+	width := 1000 + (4000 * complexity / maxComplexity)
+	height := width
+
+	offset := width / 4
+	pi := .5
+	rotation := -math.Pi * pi
+
+	s.Start(width, height)
+	defer s.End()
+	kochCurve(s, offset, offset, width-offset, offset, complexity, rotation)
+	kochCurve(s, width-offset, offset, width/2, height-offset, complexity, rotation)
+	kochCurve(s, width/2, height-offset, offset, offset, complexity, rotation)
+}
+
+func indexHandler(w http.ResponseWriter, req *http.Request) {
+	m := make(map[string]string)
+	m[""] = ""
+	t, ok := templates["index"]
+	if ok {
+		if err := t.Execute(w, &m); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	http.Error(w, "Missing template file", http.StatusInternalServerError)
+}
+
+func initTemplates() {
+	for _, name := range []string{"index"} {
+		fileName := fmt.Sprintf("templates/%s.html", name)
+		templates[name] = NewTemplate(fileName)
 	}
 }
 
 func main() {
+	initTemplates()
+
 	fmt.Println("Starting server at localhost port 8080")
+	fmt.Println("\nKoch curves/waves:")
 	fmt.Println("Pass the following url parameters:")
 	fmt.Println("complexity=n (where n in an integer in [0,9]")
 	fmt.Println("pi=n (where n is a real number [-1.0, 1.0])")
-	http.Handle("/", http.HandlerFunc(lineFractal))
+	http.Handle("/", http.HandlerFunc(indexHandler))
+	http.Handle("/linear/koch/curve/", http.HandlerFunc(kochCurveHandler))
+	http.Handle("/linear/koch/snowflake/", http.HandlerFunc(kochSnowflakeHandler))
 	err := http.ListenAndServe("localhost:8080", nil)
 	if err != nil {
 		fmt.Println("Error: ", err)

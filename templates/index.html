@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>SVG Fractal Generator</title>
+	<style type="text/css">
+		body {
+			background-color: lightblue;
+			font-family: sans-serif;
+		}
+
+		.main {
+			width: 800px;
+			margin-left: auto;
+			margin-right: auto;
+			padding: 20px;
+			border: 1px solid black;
+			background-color: white;
+		}
+
+		form {
+			display: inline;
+		}
+	</style>
+</head>
+<body>
+	<div class="main">
+		<h1>Fractals</h1>
+		<h2>Linear self repeating</h2>
+		<h3>Koch curves and related</h3>
+		<ul>
+			<li>Koch Curve -
+				<form action="linear/koch/curve/" method="get">
+					<label>Complexity: </label><input type="text" name="complexity" />
+					<label>Angle</label><input tyep="text" name="pi" />
+					<input type="submit" value="Submit"/>
+				</form>
+			</li>
+			<li>Koch Snowflake -
+				<form action="linear/koch/snowflake/" method="get">
+					<label>Complexity: </label><input type="text" name="complexity" />
+					<input type="submit" value="Submit"/>
+				</form>
+			</li>
+		</ul>
+	</div>
+</body>
+</html>

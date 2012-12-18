@@ -115,6 +115,11 @@ func (v Vector) GoString() string {
 	return fmt.Sprintf("v(%s, %s)", v.X, v.Y)
 }
 
+func (v *Vector) Reverse() {
+	v.X = -v.X
+	v.Y = -v.Y
+}
+
 /* rename these to useful names at some point */
 func NewLine(x1, y1, x2, y2 float64) Line {
 	return Line{Start: Point{X: x1, Y: y1}, Direction: Vector{Point{X: x2 - x1, Y: y2 - y1}}, Scale: 1.0}
@@ -166,12 +171,40 @@ func (l Line) Render(s *svg.SVG) {
 	}
 }
 
+// Return the length of the line
+func (l Line) Length() float64 {
+	if l.Direction.X == 0.0 {
+		return l.Direction.Y * l.Scale
+	} else if l.Direction.Y == 0.0 {
+		return l.Direction.X * l.Scale
+	}
+	x := l.Direction.X * l.Scale
+	y := l.Direction.Y * l.Scale
+	return math.Sqrt(x*x + y*y)
+}
+
+func (l *Line) SetLength(newLength float64) {
+	if l.Direction.X == 0.0 && l.Direction.Y == 0.0 {
+		return
+	}
+	length := l.Length()
+	if length != 1.0 {
+		l.Direction.X /= length
+		l.Direction.Y /= length
+	}
+	l.Scale = newLength
+}
+
+func (l *Line) Reverse() {
+	l.Direction.Reverse()
+}
+
 // Do a cross product of 2 2d vectors (temporarily viewing them in 3d for the math)
-func cross(v Vector) Vector {
+func cross(v Vector) *Vector {
 	x1, y1, z1 := v.X, v.Y, 0.0
 	_, y2, z2 := 0.0, 0.0, 1.0
 
-	return Vector{Point{X: y1*z2 - z1*y2, Y: z1*x1 - x1*z2}}
+	return &Vector{Point{X: y1*z2 - z1*y2, Y: z1*x1 - x1*z2}}
 }
 
 // Take the product of m * v and store the result in dest
@@ -307,6 +340,92 @@ func kochSnowflakeHandler(w http.ResponseWriter, req *http.Request) {
 	kochCurve(s, width/2, height-offset, offset, offset, complexity, rotation)
 }
 
+// Do the fractal
+func doPeanoCurve(s *svg.SVG, l Line, height float64, depth int) {
+	if depth <= 0 {
+		l.Render(s)
+	} else {
+		length := l.Length()
+
+		perpendicular := cross(l.Direction)
+
+		//fmt.Printf("segment len %f perp %s\n", length, perpendicular)
+
+		intersect1 := l.At(1.0 / 3.0)
+		intersect2 := l.At(2.0 / 3.0)
+
+		l1 := NewLine2(intersect1, *perpendicular, 1.0)
+		l1.SetLength(length * height)
+
+		l2 := NewLine2(intersect2, *perpendicular, 1.0)
+		l2.SetLength(length * height)
+
+		l3 := NewLine3(l1.At(1.0), l2.At(1.0))
+
+		//perpendicular.Reverse()
+
+		l4 := NewLine2(intersect1, *perpendicular, 1.0)
+		l4.SetLength(-length * height)
+
+		l5 := NewLine2(intersect2, *perpendicular, 1.0)
+		l5.SetLength(-length * height)
+
+		l6 := NewLine3(l4.At(1.0), l5.At(1.0))
+
+		l7 := NewLine3(l.Start, intersect1)
+
+		l8 := NewLine3(intersect1, intersect2)
+
+		l9 := NewLine3(intersect2, l.At(1.0))
+
+		doPeanoCurve(s, l1, height, depth-1)
+		doPeanoCurve(s, l2, height, depth-1)
+		doPeanoCurve(s, l3, height, depth-1)
+		doPeanoCurve(s, l4, height, depth-1)
+		doPeanoCurve(s, l5, height, depth-1)
+		doPeanoCurve(s, l6, height, depth-1)
+		doPeanoCurve(s, l7, height, depth-1)
+		doPeanoCurve(s, l8, height, depth-1)
+		doPeanoCurve(s, l9, height, depth-1)
+	}
+}
+
+func peanoCurve(s *svg.SVG, x1, y1, x2, y2 int, fractalHeight float64, complexity int) {
+	l := NewLine(float64(x1), float64(y1), float64(x2), float64(y2))
+
+	doPeanoCurve(s, l, fractalHeight, complexity)
+}
+
+func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
+	const (
+		defaultComplexity = 5
+		maxComplexity     = 8
+		defaultHeight     = 1.0 / 3.0
+		maxHeight         = 0.5
+		minHeight         = 0.0
+	)
+
+	_ = req.ParseForm()
+	complexity, err := strconv.Atoi(req.FormValue("complexity"))
+	if err != nil || complexity < 0 || complexity > maxComplexity {
+		complexity = defaultComplexity
+	}
+
+	fractalHeight, err := strconv.ParseFloat(req.FormValue("height"), 64)
+	if err != nil || fractalHeight < minHeight || fractalHeight > maxHeight {
+		fractalHeight = defaultHeight
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	s := svg.New(w)
+	width := 1000 + (4000 * complexity / maxComplexity)
+	height := width
+
+	s.Start(width, height)
+	defer s.End()
+	peanoCurve(s, 0, height/2, width-1, height/2, fractalHeight, complexity)
+}
+
 func indexHandler(w http.ResponseWriter, req *http.Request) {
 	m := make(map[string]string)
 	m[""] = ""
@@ -335,9 +454,14 @@ func main() {
 	fmt.Println("Pass the following url parameters:")
 	fmt.Println("complexity=n (where n in an integer in [0,9]")
 	fmt.Println("pi=n (where n is a real number [-1.0, 1.0])")
+	fmt.Println("\nPeano curves:")
+	fmt.Println("complexity=n (where n is an integer in [0,9])")
+	fmt.Println("height=n (where n is a real number [0.0, 1.0])")
+
 	http.Handle("/", http.HandlerFunc(indexHandler))
 	http.Handle("/linear/koch/curve/", http.HandlerFunc(kochCurveHandler))
 	http.Handle("/linear/koch/snowflake/", http.HandlerFunc(kochSnowflakeHandler))
+	http.Handle("/linear/peano/curve/", http.HandlerFunc(peanoCurveHandler))
 	err := http.ListenAndServe("localhost:8080", nil)
 	if err != nil {
 		fmt.Println("Error: ", err)

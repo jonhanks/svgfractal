@@ -1,6 +1,10 @@
-This is a simple koch curve generator.  It is built as a webserver that only outputs SVG so that I could do the following:
+This is a simple fractal generator.  It is built as a webserver that only outputs SVG so that I could do the following:
 
 * Play with SVG
 * Get graphical output without messing around with go-SDL or some other such library.
+
+Currently it generates some simple linear fractals (Koch curve and snowflace, and a Peano curve).
+
+It only listens on localhost, as these curves can generate a lot of segments, and thus memory, so it is utterly unsuitable for a server.
 
 On the extremely odd chance that anyone sees this code.  It is trivial code that I wrote to play with.  So I consider it in the public domain.  If I ever make something nicer of it I may change to a formal open source license.

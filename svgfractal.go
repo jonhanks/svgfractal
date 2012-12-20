@@ -8,6 +8,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/ajstarks/svgo"
 	"html/template"
@@ -16,6 +17,10 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+)
+
+var (
+	addr = flag.String("addr", "localhost:8080", "Port to listen on")
 )
 
 // A point in 2d space
@@ -36,6 +41,11 @@ type CachedTemplate struct {
 	t    *template.Template
 	mod  int64
 	path string
+}
+
+type PeanoOptions struct {
+	Height        float64
+	DisplayCenter bool
 }
 
 var (
@@ -341,10 +351,12 @@ func kochSnowflakeHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 // Do the fractal
-func doPeanoCurve(s *svg.SVG, l Line, height float64, depth int) {
+func doPeanoCurve(s *svg.SVG, l Line, options *PeanoOptions, depth int) {
 	if depth <= 0 {
 		l.Render(s)
 	} else {
+		height := options.Height
+
 		length := l.Length()
 
 		perpendicular := cross(l.Direction)
@@ -374,26 +386,29 @@ func doPeanoCurve(s *svg.SVG, l Line, height float64, depth int) {
 
 		l7 := NewLine3(l.Start, intersect1)
 
-		l8 := NewLine3(intersect1, intersect2)
+		l8 := NewLine3(intersect2, l.At(1.0))
 
-		l9 := NewLine3(intersect2, l.At(1.0))
+		doPeanoCurve(s, l1, options, depth-1)
+		doPeanoCurve(s, l2, options, depth-1)
+		doPeanoCurve(s, l3, options, depth-1)
+		doPeanoCurve(s, l4, options, depth-1)
+		doPeanoCurve(s, l5, options, depth-1)
+		doPeanoCurve(s, l6, options, depth-1)
+		doPeanoCurve(s, l7, options, depth-1)
+		doPeanoCurve(s, l8, options, depth-1)
 
-		doPeanoCurve(s, l1, height, depth-1)
-		doPeanoCurve(s, l2, height, depth-1)
-		doPeanoCurve(s, l3, height, depth-1)
-		doPeanoCurve(s, l4, height, depth-1)
-		doPeanoCurve(s, l5, height, depth-1)
-		doPeanoCurve(s, l6, height, depth-1)
-		doPeanoCurve(s, l7, height, depth-1)
-		doPeanoCurve(s, l8, height, depth-1)
-		doPeanoCurve(s, l9, height, depth-1)
+		if options.DisplayCenter {
+			l9 := NewLine3(intersect1, intersect2)
+			doPeanoCurve(s, l9, options, depth-1)
+		}
+
 	}
 }
 
-func peanoCurve(s *svg.SVG, x1, y1, x2, y2 int, fractalHeight float64, complexity int) {
+func peanoCurve(s *svg.SVG, x1, y1, x2, y2 int, options *PeanoOptions, complexity int) {
 	l := NewLine(float64(x1), float64(y1), float64(x2), float64(y2))
 
-	doPeanoCurve(s, l, fractalHeight, complexity)
+	doPeanoCurve(s, l, options, complexity)
 }
 
 func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
@@ -405,15 +420,22 @@ func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
 		minHeight         = 0.0
 	)
 
+	options := PeanoOptions{}
+
 	_ = req.ParseForm()
 	complexity, err := strconv.Atoi(req.FormValue("complexity"))
 	if err != nil || complexity < 0 || complexity > maxComplexity {
 		complexity = defaultComplexity
 	}
 
-	fractalHeight, err := strconv.ParseFloat(req.FormValue("height"), 64)
-	if err != nil || fractalHeight < minHeight || fractalHeight > maxHeight {
-		fractalHeight = defaultHeight
+	options.Height, err = strconv.ParseFloat(req.FormValue("height"), 64)
+	if err != nil || options.Height < minHeight || options.Height > maxHeight {
+		options.Height = defaultHeight
+	}
+
+	center := req.FormValue("center")
+	if center == "true" {
+		options.DisplayCenter = true
 	}
 
 	w.Header().Set("Content-Type", "image/svg+xml")
@@ -423,7 +445,8 @@ func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
 
 	s.Start(width, height)
 	defer s.End()
-	peanoCurve(s, 0, height/2, width-1, height/2, fractalHeight, complexity)
+
+	peanoCurve(s, 0, height/2, width-1, height/2, &options, complexity)
 }
 
 func indexHandler(w http.ResponseWriter, req *http.Request) {
@@ -447,6 +470,8 @@ func initTemplates() {
 }
 
 func main() {
+	flag.Parse()
+
 	initTemplates()
 
 	fmt.Println("Starting server at localhost port 8080")
@@ -462,7 +487,7 @@ func main() {
 	http.Handle("/linear/koch/curve/", http.HandlerFunc(kochCurveHandler))
 	http.Handle("/linear/koch/snowflake/", http.HandlerFunc(kochSnowflakeHandler))
 	http.Handle("/linear/peano/curve/", http.HandlerFunc(peanoCurveHandler))
-	err := http.ListenAndServe("localhost:8080", nil)
+	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		fmt.Println("Error: ", err)
 	}

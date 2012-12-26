@@ -209,7 +209,9 @@ func (l *Line) Reverse() {
 	l.Direction.Reverse()
 }
 
-// Do a cross product of 2 2d vectors (temporarily viewing them in 3d for the math)
+// Find the perpendicular vector to the 2d vector v.
+// This is done by computing the cross product of v with
+// the Z unit vector
 func cross(v Vector) *Vector {
 	x1, y1, z1 := v.X, v.Y, 0.0
 	_, y2, z2 := 0.0, 0.0, 1.0

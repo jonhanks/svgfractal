@@ -451,6 +451,70 @@ func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
 	peanoCurve(s, 0, height/2, width-1, height/2, &options, complexity)
 }
 
+func doDragonCurve(s *svg.SVG, l Line, useRot1 bool, rot1, rot2 *Matrix, depth int) bool {
+	if depth <= 0 {
+		l.Render(s)
+		if useRot1 {
+			fmt.Printf("1")
+		} else {
+			fmt.Printf("2")
+		}
+	} else {
+		m := rot1
+		if !useRot1 {
+			m = rot2
+		}
+		perp := MultMatrixVector(m, &l.Direction)
+		center := l.At(0.5)
+
+		center_line := NewLine2(center, *perp, 1.0)
+		center_line.SetLength(l.Length()/2.0)
+
+		peak := center_line.At(1.0)
+
+		useRot1 = doDragonCurve(s, NewLine3(l.At(0.0), peak), useRot1, rot1, rot2, depth-1)
+		useRot1 = doDragonCurve(s, NewLine3(peak, l.At(1.0)), useRot1, rot1, rot2, depth-1)
+	}
+	if depth == 1 {
+		return !useRot1
+	}
+	return useRot1
+}
+
+func dragonCurve(s *svg.SVG, x1, y1, x2, y2, complexity int) {
+	l := NewLine(float64(x1), float64(y1), float64(x2), float64(y2))
+
+	left, right := NewMatrix(), NewMatrix()
+	left.Rotate(math.Pi/2.0)
+	right.Rotate(-math.Pi/2.0)
+
+	_ = doDragonCurve(s, l, true, left, right, complexity)
+}
+
+func dragonCurveHandler(w http.ResponseWriter, req *http.Request) {
+	const (
+		defaultComplexity = 5
+		maxComplexity = 12
+	)
+
+	_ = req.ParseForm()
+	complexity, err := strconv.Atoi(req.FormValue("complexity"))
+	if err != nil || complexity < 0 || complexity > maxComplexity {
+		complexity = defaultComplexity
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	s := svg.New(w)
+
+	width := 1000 + (4000*complexity/maxComplexity)
+	height := width
+
+	s.Start(width, height)
+	defer s.End()
+
+	dragonCurve(s, width/3, height/2, width-(width/3), height/2, complexity)
+}
+
 func indexHandler(w http.ResponseWriter, req *http.Request) {
 	m := make(map[string]string)
 	m[""] = ""
@@ -485,10 +549,15 @@ func main() {
 	fmt.Println("complexity=n (where n is an integer in [0,9])")
 	fmt.Println("height=n (where n is a real number [0.0, 1.0])")
 
+	fmt.Println("\nDragon curves:")
+	fmt.Println("complexity=n (where n is an integer in [0,9]")
+
 	http.Handle("/", http.HandlerFunc(indexHandler))
 	http.Handle("/linear/koch/curve/", http.HandlerFunc(kochCurveHandler))
 	http.Handle("/linear/koch/snowflake/", http.HandlerFunc(kochSnowflakeHandler))
 	http.Handle("/linear/peano/curve/", http.HandlerFunc(peanoCurveHandler))
+	http.Handle("/linear/dragon/curve/", http.HandlerFunc(dragonCurveHandler))
+
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		fmt.Println("Error: ", err)

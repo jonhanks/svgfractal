@@ -130,6 +130,18 @@ func (v *Vector) Reverse() {
 	v.Y = -v.Y
 }
 
+func (v *Vector) Length() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+
+func (v *Vector) MakeUnitLength() {
+	l := v.Length()
+	if l > 0.0 && l != 1.0 {
+		v.X /= l
+		v.Y /= l
+	}
+}
+
 /* rename these to useful names at some point */
 func NewLine(x1, y1, x2, y2 float64) Line {
 	return Line{Start: Point{X: x1, Y: y1}, Direction: Vector{Point{X: x2 - x1, Y: y2 - y1}}, Scale: 1.0}
@@ -451,50 +463,34 @@ func peanoCurveHandler(w http.ResponseWriter, req *http.Request) {
 	peanoCurve(s, 0, height/2, width-1, height/2, &options, complexity)
 }
 
-func doDragonCurve(s *svg.SVG, l Line, useRot1 bool, rot1, rot2 *Matrix, depth int) bool {
-	if depth <= 0 {
-		l.Render(s)
-		if useRot1 {
-			fmt.Printf("1")
-		} else {
-			fmt.Printf("2")
+func dragonCurve(s *svg.SVG, x1, y1, complexity, maxComplexity int) {
+	sys := NewLSystem()
+	sys.FinalizeDragon(complexity)
+
+	steps := sys.String()
+	t := NewTurtle(s)
+	t.SetLocation(Point{X: float64(x1), Y: float64(y1)})
+
+	scale := 10.0 + 5.0*float64(maxComplexity-complexity)
+
+	totalSteps := len(steps)
+	for i := 0; i < totalSteps; i++ {
+		switch steps[i] {
+		case 'F':
+			t.Move(scale)
+		case '+':
+			t.Turn(math.Pi / 2.0)
+		case '-':
+			t.Turn(math.Pi / -2.0)
+		default: // ignore anything else
 		}
-	} else {
-		m := rot1
-		if !useRot1 {
-			m = rot2
-		}
-		perp := MultMatrixVector(m, &l.Direction)
-		center := l.At(0.5)
-
-		center_line := NewLine2(center, *perp, 1.0)
-		center_line.SetLength(l.Length()/2.0)
-
-		peak := center_line.At(1.0)
-
-		useRot1 = doDragonCurve(s, NewLine3(l.At(0.0), peak), useRot1, rot1, rot2, depth-1)
-		useRot1 = doDragonCurve(s, NewLine3(peak, l.At(1.0)), useRot1, rot1, rot2, depth-1)
 	}
-	if depth == 1 {
-		return !useRot1
-	}
-	return useRot1
-}
-
-func dragonCurve(s *svg.SVG, x1, y1, x2, y2, complexity int) {
-	l := NewLine(float64(x1), float64(y1), float64(x2), float64(y2))
-
-	left, right := NewMatrix(), NewMatrix()
-	left.Rotate(math.Pi/2.0)
-	right.Rotate(-math.Pi/2.0)
-
-	_ = doDragonCurve(s, l, true, left, right, complexity)
 }
 
 func dragonCurveHandler(w http.ResponseWriter, req *http.Request) {
 	const (
 		defaultComplexity = 5
-		maxComplexity = 12
+		maxComplexity     = 16
 	)
 
 	_ = req.ParseForm()
@@ -506,13 +502,13 @@ func dragonCurveHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	s := svg.New(w)
 
-	width := 1000 + (4000*complexity/maxComplexity)
+	width := 1000 + (4000 * complexity / maxComplexity)
 	height := width
 
 	s.Start(width, height)
 	defer s.End()
 
-	dragonCurve(s, width/3, height/2, width-(width/3), height/2, complexity)
+	dragonCurve(s, width/2, height/2, complexity, maxComplexity)
 }
 
 func indexHandler(w http.ResponseWriter, req *http.Request) {
@@ -550,7 +546,7 @@ func main() {
 	fmt.Println("height=n (where n is a real number [0.0, 1.0])")
 
 	fmt.Println("\nDragon curves:")
-	fmt.Println("complexity=n (where n is an integer in [0,9]")
+	fmt.Println("complexity=n (where n is an integer in [0,16]")
 
 	http.Handle("/", http.HandlerFunc(indexHandler))
 	http.Handle("/linear/koch/curve/", http.HandlerFunc(kochCurveHandler))

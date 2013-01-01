@@ -9,6 +9,7 @@ const BUF_SIZE = 1024 * 1024
 
 // Lindenmayer system
 type LSystem struct {
+	rules      map[byte][]byte
 	buf1       []byte
 	buf2       []byte
 	len1, len2 int
@@ -17,13 +18,30 @@ type LSystem struct {
 
 // create a New Lindenmayer system
 func NewLSystem() *LSystem {
-	return &LSystem{buf1: make([]byte, BUF_SIZE), buf2: make([]byte, BUF_SIZE), len1: 0, len2: 0, cur: 0}
+	return &LSystem{rules: make(map[byte][]byte), buf1: make([]byte, BUF_SIZE), buf2: make([]byte, BUF_SIZE), len1: 0, len2: 0, cur: 0}
 }
 
 // Setup the Lindenmayer object for computing a dragon fractal
 func (sys *LSystem) InitDragon() {
+	sys.rules = make(map[byte][]byte)
+	sys.rules['X'] = []byte("X+YF")
+	sys.rules['Y'] = []byte("FX-Y")
+
 	sys.buf1[0] = 'F'
 	sys.buf1[1] = 'X'
+	sys.len1 = 2
+	sys.len2 = 0
+	sys.cur = 0
+}
+
+// Setup the Lindenmayer object for computing a plant
+func (sys *LSystem) InitPlant1() {
+	sys.rules = make(map[byte][]byte)
+	sys.rules['X'] = []byte("F-[[X]+X]+F[+FX]-X")
+	sys.rules['F'] = []byte("FF")
+
+	sys.buf1[0] = 'X'
+	sys.buf1[1] = 'F'
 	sys.len1 = 2
 	sys.len2 = 0
 	sys.cur = 0
@@ -81,9 +99,7 @@ func appendDestByte(dest []byte, curLength, maxLength int, value byte) (int, err
 }
 
 // Iterate a dragon function through the specified number of iterations
-func (sys *LSystem) IterateDragon(iterations int) {
-
-	sys.InitDragon()
+func (sys *LSystem) IterateSystem(iterations int) {
 
 	XSUB := []byte("X+YF")
 	YSUB := []byte("FX-Y")
@@ -113,6 +129,44 @@ func (sys *LSystem) IterateDragon(iterations int) {
 
 		sys.swapBuffers(destLen)
 	}
+}
+
+func (sys *LSystem) IteratePlant1(iterations int) {
+	sys.InitPlant1()
+
+	XSUB := []byte("F-[[X]+X]+F[+FX]-X")
+	FSUB := []byte("FF")
+
+	for ; iterations > 0; iterations-- {
+		src, srcLen := sys.getCurBuf()
+		dest := sys.getNextBuf()
+		destLen := 0
+
+		var err error
+
+		for i := 0; i < srcLen; i++ {
+			switch src[i] {
+			case 'X':
+				if destLen, err = appendDest(dest, destLen, BUF_SIZE, XSUB); err != nil {
+					return
+				}
+			case 'F':
+				if destLen, err = appendDest(dest, destLen, BUF_SIZE, FSUB); err != nil {
+					return
+				}
+			default:
+				if destLen, err = appendDestByte(dest, destLen, BUF_SIZE, src[i]); err != nil {
+					return
+				}
+			}
+		}
+
+		sys.swapBuffers(destLen)
+	}
+}
+
+func (sys *LSystem) FinalizePlant1(iterations int) {
+	sys.IteratePlant1(iterations)
 }
 
 // Iterate a dragon function through the specified number of iterations and remove the unused

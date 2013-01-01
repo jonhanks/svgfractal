@@ -511,6 +511,60 @@ func dragonCurveHandler(w http.ResponseWriter, req *http.Request) {
 	dragonCurve(s, width/2, height/2, complexity, maxComplexity)
 }
 
+func plant1Curve(s *svg.SVG, x1, y1, complexity, maxComplexity int) {
+	sys := NewLSystem()
+	sys.FinalizePlant1(complexity)
+
+	steps := sys.String()
+	t := NewTurtle(s)
+	t.SetLocation(Point{X: float64(x1), Y: float64(y1)})
+
+	scale := 10.0 + 5.0*float64(maxComplexity-complexity)
+
+	angle := (25.0 * math.Pi * 2.0) / 360.0
+
+	totalSteps := len(steps)
+	for i := 0; i < totalSteps; i++ {
+		switch steps[i] {
+		case 'F':
+			t.Move(scale)
+		case '+':
+			t.Turn(angle)
+		case '-':
+			t.Turn(-angle)
+		case '[':
+			t.PushState()
+		case ']':
+			t.PopState()
+		default: // ignore anything else
+		}
+	}
+}
+
+func plant1Handler(w http.ResponseWriter, req *http.Request) {
+	const (
+		defaultComplexity = 5
+		maxComplexity     = 12
+	)
+
+	_ = req.ParseForm()
+	complexity, err := strconv.Atoi(req.FormValue("complexity"))
+	if err != nil || complexity < 0 || complexity > maxComplexity {
+		complexity = defaultComplexity
+	}
+
+	w.Header().Set("Content-Type", "image/svg+xml")
+	s := svg.New(w)
+
+	width := 1000 + (4000 * complexity / maxComplexity)
+	height := width
+
+	s.Start(width, height)
+	defer s.End()
+
+	plant1Curve(s, width/5, height-(height/5), complexity, maxComplexity)
+}
+
 func indexHandler(w http.ResponseWriter, req *http.Request) {
 	m := make(map[string]string)
 	m[""] = ""
@@ -553,6 +607,7 @@ func main() {
 	http.Handle("/linear/koch/snowflake/", http.HandlerFunc(kochSnowflakeHandler))
 	http.Handle("/linear/peano/curve/", http.HandlerFunc(peanoCurveHandler))
 	http.Handle("/linear/dragon/curve/", http.HandlerFunc(dragonCurveHandler))
+	http.Handle("/linear/plant1/", http.HandlerFunc(plant1Handler))
 
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {

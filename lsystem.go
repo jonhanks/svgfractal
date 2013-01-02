@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 )
 
 const BUF_SIZE = 1024 * 1024
@@ -98,11 +97,9 @@ func appendDestByte(dest []byte, curLength, maxLength int, value byte) (int, err
 	return curLength + 1, nil
 }
 
-// Iterate a dragon function through the specified number of iterations
+// Iterate a L-System function through the specified number of iterations
 func (sys *LSystem) IterateSystem(iterations int) {
 
-	XSUB := []byte("X+YF")
-	YSUB := []byte("FX-Y")
 	for ; iterations > 0; iterations-- {
 		src, srcLen := sys.getCurBuf()
 		dest := sys.getNextBuf()
@@ -111,50 +108,12 @@ func (sys *LSystem) IterateSystem(iterations int) {
 		var err error
 
 		for i := 0; i < srcLen; i++ {
-			switch src[i] {
-			case 'X':
-				if destLen, err = appendDest(dest, destLen, BUF_SIZE, XSUB); err != nil {
+
+			if replacement, ok := sys.rules[src[i]]; ok {
+				if destLen, err = appendDest(dest, destLen, BUF_SIZE, replacement); err != nil {
 					return
 				}
-			case 'Y':
-				if destLen, err = appendDest(dest, destLen, BUF_SIZE, YSUB); err != nil {
-					return
-				}
-			default:
-				if destLen, err = appendDestByte(dest, destLen, BUF_SIZE, src[i]); err != nil {
-					return
-				}
-			}
-		}
-
-		sys.swapBuffers(destLen)
-	}
-}
-
-func (sys *LSystem) IteratePlant1(iterations int) {
-	sys.InitPlant1()
-
-	XSUB := []byte("F-[[X]+X]+F[+FX]-X")
-	FSUB := []byte("FF")
-
-	for ; iterations > 0; iterations-- {
-		src, srcLen := sys.getCurBuf()
-		dest := sys.getNextBuf()
-		destLen := 0
-
-		var err error
-
-		for i := 0; i < srcLen; i++ {
-			switch src[i] {
-			case 'X':
-				if destLen, err = appendDest(dest, destLen, BUF_SIZE, XSUB); err != nil {
-					return
-				}
-			case 'F':
-				if destLen, err = appendDest(dest, destLen, BUF_SIZE, FSUB); err != nil {
-					return
-				}
-			default:
+			} else {
 				if destLen, err = appendDestByte(dest, destLen, BUF_SIZE, src[i]); err != nil {
 					return
 				}
@@ -166,34 +125,14 @@ func (sys *LSystem) IteratePlant1(iterations int) {
 }
 
 func (sys *LSystem) FinalizePlant1(iterations int) {
-	sys.IteratePlant1(iterations)
+	sys.InitPlant1()
+	sys.IterateSystem(iterations)
 }
 
-// Iterate a dragon function through the specified number of iterations and remove the unused
-// grammatical text from the output string
+// Iterate a dragon function through the specified number of iterations
 func (sys *LSystem) FinalizeDragon(iterations int) {
-	sys.IterateDragon(iterations)
-	src, srcLen := sys.getCurBuf()
-	dest := sys.getNextBuf()
-	destLen := 0
-
-	segments := 0
-
-	for i := 0; i < srcLen; i++ {
-		switch src[i] {
-		case 'F':
-			segments++
-			fallthrough
-		case '+':
-			fallthrough
-		case '-':
-			dest[destLen] = src[i]
-			destLen++
-		default:
-		}
-	}
-	sys.swapBuffers(destLen)
-	fmt.Printf("Segment count at %d iterations is %d\n", iterations, segments)
+	sys.InitDragon()
+	sys.IterateSystem(iterations)
 }
 
 // Return a string version of the current output

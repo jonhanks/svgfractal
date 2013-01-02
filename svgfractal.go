@@ -471,7 +471,7 @@ func dragonCurve(s *svg.SVG, x1, y1, complexity, maxComplexity int) {
 	t := NewTurtle(s)
 	t.SetLocation(Point{X: float64(x1), Y: float64(y1)})
 
-	scale := 10.0 + 5.0*float64(maxComplexity-complexity)
+	scale := 10.0 + 2.0*float64(maxComplexity-complexity)
 
 	totalSteps := len(steps)
 	for i := 0; i < totalSteps; i++ {
@@ -519,7 +519,7 @@ func plant1Curve(s *svg.SVG, x1, y1, complexity, maxComplexity int) {
 	t := NewTurtle(s)
 	t.SetLocation(Point{X: float64(x1), Y: float64(y1)})
 
-	scale := 10.0 + 5.0*float64(maxComplexity-complexity)
+	scale := 5.0
 
 	angle := (25.0 * math.Pi * 2.0) / 360.0
 
